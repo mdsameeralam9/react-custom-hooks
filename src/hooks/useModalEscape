@@ -1,0 +1,43 @@
+// useModalEscape.ts - component-scoped external store
+import { useMemo } from "react";
+import { useSyncExternalStore } from "react";
+
+export function useModalEscape(active: boolean) {
+  const store = useMemo(() => {
+    let tick = 0;
+    const listeners = new Set<() => void>();
+
+    const getSnapshot = () => tick;
+    const subscribe = (listener: () => void) => {
+      const handler = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          tick++;
+          for (const l of listeners) l();
+        }
+      };
+      listeners.add(listener);
+      window.addEventListener("keydown", handler);
+      return () => {
+        listeners.delete(listener);
+        window.removeEventListener("keydown", handler);
+      };
+    };
+    return { getSnapshot, subscribe };
+  }, []);
+
+  // When inactive, freeze the snapshot at 0 by providing a no-op subscribe
+  const snapshot = useSyncExternalStore(
+    active ? store.subscribe : (cb) => () => {},
+    active ? store.getSnapshot : () => 0,
+    () => 0
+  );
+
+  return snapshot; // increases on each Escape while active
+}
+
+
+const tick = useModalEscape(open);
+useEffect(() => {
+  if (open && tick > 0) close();
+}, [tick, open, close]);
